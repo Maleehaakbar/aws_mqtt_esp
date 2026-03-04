@@ -44,5 +44,8 @@ DATA=data
 2. embed certificates in cmake (private key/device cert/amaazon root cert)
 3. client id should be same as thing name in AWS IoT thing created
 4. modify client config to add certificates
+5. In aws iot test client , subsribe to /topic/qos0  and publish "send binary please" to 
+   /topic/qos0
+6. subscribe to topic/binary in mqtt test client and binary is send there
 
 # aws_esp32
