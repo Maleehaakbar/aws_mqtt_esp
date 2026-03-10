@@ -13,9 +13,10 @@
 
 static const char *TAG = "mpu6050_test";
 
-void mpu6050_test(float accelro[], float gyro[], float* temperature)
+ mpu6050_dev_t dev = { 0 };
+
+void mpu_init()
 {
-    mpu6050_dev_t dev = { 0 };
 
     ESP_ERROR_CHECK(mpu6050_init_desc(&dev, ADDR, 0, CONFIG_EXAMPLE_SDA_GPIO, CONFIG_EXAMPLE_SCL_GPIO));
 
@@ -32,6 +33,10 @@ void mpu6050_test(float accelro[], float gyro[], float* temperature)
     }
 
     ESP_ERROR_CHECK(mpu6050_init(&dev));
+}
+
+void mpu6050_test(float accelro[], float gyro[], float* temperature)
+{
 
     ESP_LOGI(TAG, "Accel range: %d", dev.ranges.accel);
     ESP_LOGI(TAG, "Gyro range:  %d", dev.ranges.gyro);

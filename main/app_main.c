@@ -36,16 +36,20 @@ extern const uint8_t devicecertificate_pem_crt_end[]           asm("_binary_devi
 extern const uint8_t private_pem_key_start[]        asm("_binary_private_pem_key_start");
 extern const uint8_t private_pem_key_end[]          asm("_binary_private_pem_key_end");
 
-//
-// Note: this function is for testing purposes only publishing part of the active partition
-//       (to be checked against the original binary)
-//
+EventGroupHandle_t xCreatedEventGroup;
 
+#define MQTT_CONNECTED_BIT      BIT0
+#define MQTT_DISCONNECT_BIT      BIT1
+
+esp_mqtt_client_handle_t client = NULL;
+
+
+void mpu_init();
 void mpu6050_test(float accelro[], float gyro[], float* temperature);
 
 
 
-void send_sensor_data(esp_mqtt_client_handle_t client)
+void send_sensor_data()
 {
     float accel[3] ={0};
     float gyro[3] ={0};
@@ -56,7 +60,7 @@ void send_sensor_data(esp_mqtt_client_handle_t client)
         snprintf(sensor_data,sizeof(sensor_data), " ax=%.4f ay=%.4f az=%.4f, gx=%.4f gy=%.4f gz=%.4f , t=%.1f", accel[0], accel[1], accel[2], gyro[0], gyro[1], gyro[2], temp);
         int msg_id = esp_mqtt_client_publish(client,"topic/sensordata",sensor_data, strlen(sensor_data),0,0); //use strlen to ignore unsed bytes
         ESP_LOGI(TAG, "sensor data sent with msg_id=%d", msg_id);
-        vTaskDelay(pdMS_TO_TICKS(1000));
+        vTaskDelay(pdMS_TO_TICKS(500));
     
 } 
 
@@ -82,9 +86,12 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
         msg_id = esp_mqtt_client_subscribe(client, "topic/led0", 0); //subscribe to the topic and publish to same topic so the data echos back
         ESP_LOGI(TAG, "sent subscribe successful, msg_id=%d", msg_id);
 
+        xEventGroupSetBits(xCreatedEventGroup,MQTT_CONNECTED_BIT);  //set bit if connection to broker established
+
         break;
     case MQTT_EVENT_DISCONNECTED:
         ESP_LOGI(TAG, "MQTT_EVENT_DISCONNECTED");
+        xEventGroupSetBits(xCreatedEventGroup,MQTT_DISCONNECT_BIT);  //set bit if connection to broker lost
         break;
 
     case MQTT_EVENT_SUBSCRIBED:
@@ -141,11 +148,15 @@ static void mqtt_app_start(void)
 
     };
 
+
+
     ESP_LOGI(TAG, "[APP] Free memory: %" PRIu32 " bytes", esp_get_free_heap_size());
-    esp_mqtt_client_handle_t client = esp_mqtt_client_init(&mqtt_cfg);   /*esp32 act as client*/
+    client = esp_mqtt_client_init(&mqtt_cfg);   /*esp32 act as client*/
     /* The last argument may be used to pass data to the event handler, in this example mqtt_event_handler */
     esp_mqtt_client_register_event(client, ESP_EVENT_ANY_ID, mqtt_event_handler, NULL);
     esp_mqtt_client_start(client);
+
+    
 }
 
 
@@ -166,6 +177,7 @@ void app_main(void)
     ESP_ERROR_CHECK(nvs_flash_init());
 
     ESP_ERROR_CHECK(i2cdev_init());
+    mpu_init();
 
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
@@ -173,6 +185,29 @@ void app_main(void)
     ESP_ERROR_CHECK(example_connect());
 
     mqtt_app_start();
- 
+
+    //wait for any bit to set, respond to which event occurs first (xWaitForAllBits = pdfalse).
+    //dont clear on exit , as we'll check bit later( xClearOnExit = false)
+    xCreatedEventGroup  = xEventGroupCreate();  //create event group
+    EventBits_t bits = xEventGroupWaitBits(xCreatedEventGroup,  //This function cannot be called from an interrupt.
+            MQTT_CONNECTED_BIT | MQTT_DISCONNECT_BIT,
+            pdFALSE,
+            pdFALSE,   
+            portMAX_DELAY);
+
+    if (bits & MQTT_CONNECTED_BIT) //if mqtt conected then publish sensor data
+    {
+        while(1)
+        {
+            send_sensor_data();
+            vTaskDelay(pdMS_TO_TICKS(1000));
+        }
+    }
+
+    else if(bits & MQTT_DISCONNECT_BIT)
+    {
+        ESP_LOGE(TAG,"mqtt broker disconnected, failed to send data");
+        return;
+    }
    
 }
