@@ -54,10 +54,10 @@ void send_sensor_data()
     float accel[3] ={0};
     float gyro[3] ={0};
     float temp =0.0;
-    char sensor_data[80] ={0};
+    char sensor_data[100] ={0};
 
         mpu6050_test(accel, gyro, &temp);
-        snprintf(sensor_data,sizeof(sensor_data), " ax=%.4f ay=%.4f az=%.4f, gx=%.4f gy=%.4f gz=%.4f , t=%.1f", accel[0], accel[1], accel[2], gyro[0], gyro[1], gyro[2], temp);
+        snprintf(sensor_data,sizeof(sensor_data), "{\"ax\":%.4f, \"ay\":%.4f, \"az\":%.4f, \"gx\":%.4f, \"gy\":%.4f, \"gz\":%.4f , \"t\":%.1f}", accel[0], accel[1], accel[2], gyro[0], gyro[1], gyro[2], temp);
         int msg_id = esp_mqtt_client_publish(client,"topic/sensordata",sensor_data, strlen(sensor_data),0,0); //use strlen to ignore unsed bytes
         ESP_LOGI(TAG, "sensor data sent with msg_id=%d", msg_id);
         vTaskDelay(pdMS_TO_TICKS(500));
